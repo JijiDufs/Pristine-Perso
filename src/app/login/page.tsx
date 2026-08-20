@@ -1,16 +1,16 @@
 "use client";
 import { Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Lock, Loader2, AlertTriangle } from "lucide-react";
 import Logo from "@/components/Logo";
 import { Field } from "@/components/ui";
 
 function Form() {
-  const router = useRouter();
   const params = useSearchParams();
   const setup = params.get("setup") === "1";
   const next = params.get("next") ?? "/";
   const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -20,11 +20,13 @@ function Form() {
       const res = await fetch("/api/auth", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ password, remember }),
       });
       const data = await res.json();
       if (!res.ok) setError(data.error ?? "Échec");
-      else { router.push(next); router.refresh(); }
+      // Navigation dure : elle vide le cache client du routeur, qui pourrait
+      // sinon resservir une page rendue avant la connexion.
+      else window.location.href = next;
     } catch (e) { setError((e as Error).message); }
     setBusy(false);
   };
@@ -60,13 +62,22 @@ function Form() {
                 onChange={(e) => setPassword(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && submit()} />
             </Field>
+            <label style={{ display: "flex", gap: 9, alignItems: "flex-start", cursor: "pointer", marginBottom: 14 }}>
+              <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} style={{ marginTop: 3 }} />
+              <span style={{ fontSize: 13 }}>Se souvenir de cet appareil
+                <span className="tiny dim" style={{ display: "block", marginTop: 2 }}>
+                  Connexion conservée 60 jours. Décoche sur un appareil qui n&apos;est pas le tien :
+                  la session se ferme alors avec le navigateur.
+                </span>
+              </span>
+            </label>
             {error && <div className="tiny" style={{ color: "var(--coral)", marginBottom: 10 }}>{error}</div>}
             <button className="btn btn-gold btn-block" onClick={submit} disabled={busy || !password}>
               {busy ? <Loader2 size={15} className="spin" /> : <Lock size={15} />} Entrer
             </button>
             <p className="tiny dim" style={{ marginTop: 18, lineHeight: 1.5 }}>
-              La session reste ouverte 30 jours sur cet appareil. Changer le mot de passe
-              déconnecte immédiatement partout ailleurs.
+              Changer <code className="mono">APP_PASSWORD</code> déconnecte immédiatement
+              tous les appareils, partout.
             </p>
           </>
         )}

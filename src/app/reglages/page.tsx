@@ -1,10 +1,10 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Check, Loader2, Download, Upload, Trash2 } from "lucide-react";
+import { Check, Loader2, Download, Upload, Trash2, RotateCcw } from "lucide-react";
 import { Field, useToast } from "@/components/ui";
 import { num } from "@/lib/domain";
-import { getDemo, saveDemo, getGame } from "@/lib/db";
-import { BADGES, levelOf, type Game } from "@/lib/game";
+import { getDemo, saveDemo, getGame, saveGame } from "@/lib/db";
+import { BADGES, GAME_DEFAULT, levelOf, type Game } from "@/lib/game";
 import { readUsage, type Usage } from "@/lib/ai";
 import {
   db, getSettings, saveSettings, getSales, saveSales, getWishlist, saveWishlist,
@@ -32,6 +32,8 @@ export default function Reglages() {
   const [s, setS] = useState<Settings | null>(null);
   const [busy, setBusy] = useState(false);
   const [armed, setArmed] = useState(false);
+  const [armedSales, setArmedSales] = useState(false);
+  const [armedGame, setArmedGame] = useState(false);
   const [demo, setDemo] = useState(true);
   const [game, setGame] = useState<Game | null>(null);
   const [usage, setUsage] = useState<Usage | null>(null);
@@ -88,6 +90,32 @@ export default function Reglages() {
       toast(`${data.cards.length} carte(s) importée(s)`);
     } catch (e) { toast("Import impossible : " + (e as Error).message, "err"); }
     setBusy(false);
+  };
+
+  /* Remise à zéro des ventes seule : le stock est conservé, les cartes vendues
+     repassent en stock. C'est ce qu'il faut après une série de tests. */
+  const resetSales = async () => {
+    await saveSales([]);
+    const cards = await db.cards.all();
+    for (const c of cards) {
+      if (c.status !== "sold") continue;
+      const listings = { ...c.listings };
+      Object.keys(listings).forEach((k) => {
+        if (listings[k]?.status === "sold") listings[k] = { ...listings[k], status: "removed" };
+      });
+      await db.cards.put({ ...c, status: "stock", soldAt: undefined, listings });
+    }
+    const lots = await getLots();
+    await saveLots(lots.map((l) => (l.status === "sold" ? { ...l, status: "stock", soldAt: undefined } : l)));
+    setArmedSales(false);
+    toast("Ventes effacées — les cartes vendues sont revenues en stock");
+  };
+
+  const resetGame = async () => {
+    await saveGame({ ...GAME_DEFAULT });
+    setGame({ ...GAME_DEFAULT });
+    setArmedGame(false);
+    toast("Progression remise à zéro");
   };
 
   const reset = async () => {
@@ -192,6 +220,40 @@ export default function Reglages() {
       <button className="btn btn-gold" style={{ marginBottom: 22 }} onClick={save} disabled={busy}>
         {busy ? <Loader2 size={15} className="spin" /> : <Check size={15} />} Enregistrer
       </button>
+
+      <div className="panel" style={{ marginBottom: 16 }}>
+        <div className="panel-h"><h3>Remises à zéro</h3></div>
+        <div className="panel-b">
+          <p className="tiny muted" style={{ marginTop: 0, lineHeight: 1.6 }}>
+            Deux remises à zéro ciblées, utiles après une série de tests. Elles ne touchent
+            pas à ton stock : les cartes restent, seules les données dérivées disparaissent.
+          </p>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            {armedSales ? (
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <span className="tiny" style={{ color: "var(--coral)" }}>Historique et profits effacés —</span>
+                <button className="btn btn-danger btn-sm" onClick={resetSales}>Confirmer</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => setArmedSales(false)}>Annuler</button>
+              </div>
+            ) : (
+              <button className="btn" onClick={() => setArmedSales(true)}>
+                <RotateCcw size={14} /> Réinitialiser les ventes
+              </button>
+            )}
+            {armedGame ? (
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <span className="tiny" style={{ color: "var(--coral)" }}>XP et badges perdus —</span>
+                <button className="btn btn-danger btn-sm" onClick={resetGame}>Confirmer</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => setArmedGame(false)}>Annuler</button>
+              </div>
+            ) : (
+              <button className="btn" onClick={() => setArmedGame(true)}>
+                <RotateCcw size={14} /> Réinitialiser la progression
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
 
       <div className="panel">
         <div className="panel-h"><h3>Tes données</h3></div>

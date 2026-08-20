@@ -1,10 +1,10 @@
-/* Verrou d'accès à un seul utilisateur : toi.
+/* Verrou d'accès à un seul utilisateur.
    Le cookie porte un jeton signé (HMAC-SHA256) et une date d'expiration.
    La clé de signature dérive du mot de passe : le changer invalide donc
    toutes les sessions ouvertes, ce qui est exactement le comportement voulu. */
 
 export const COOKIE = "pristine_auth";
-const DAYS = 30;
+const REMEMBER_DAYS = 60;
 
 const enc = new TextEncoder();
 
@@ -32,8 +32,8 @@ export function safeEqual(a: string, b: string) {
   return diff === 0;
 }
 
-export async function issueToken(secret: string) {
-  const exp = String(Date.now() + DAYS * 86400_000);
+export async function issueToken(secret: string, days: number) {
+  const exp = String(Date.now() + days * 86400_000);
   return `${exp}.${await hmac(secret, exp)}`;
 }
 
@@ -45,10 +45,19 @@ export async function verifyToken(token: string | undefined, secret: string) {
   return safeEqual(sig, await hmac(secret, exp));
 }
 
-export const cookieOptions = {
-  httpOnly: true,
-  sameSite: "lax" as const,
-  secure: process.env.NODE_ENV === "production",
-  path: "/",
-  maxAge: DAYS * 86400,
-};
+/** `remember` absent : cookie de session, effacé à la fermeture du navigateur. */
+export function cookieOptions(remember: boolean) {
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    ...(remember ? { maxAge: REMEMBER_DAYS * 86400 } : {}),
+  };
+}
+
+export const SESSION_DAYS = { remember: REMEMBER_DAYS, session: 1 };
+
+/** Les pages protégées ne doivent jamais rester en cache : sinon le navigateur
+ *  les ressert après déconnexion sans repasser par le middleware. */
+export const NO_STORE = "no-store, no-cache, must-revalidate, max-age=0";

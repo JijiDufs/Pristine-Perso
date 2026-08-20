@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   LayoutDashboard, ScanLine, Package, Radio, Star, ImagePlus,
@@ -36,7 +36,6 @@ function Inner({ children }: { children: React.ReactNode }) {
   useKonami(() => setChroma((c) => !c));
   const tapLogo = useTripleTap(() => { setSpin(true); setTimeout(() => setSpin(false), 600); });
   const path = usePathname();
-  const router = useRouter();
   const [plus, setPlus] = useState(false);
   const [theme, setTheme] = useState("dark");
   const [stock, setStock] = useState({ value: 0, held: 0, total: 0 });
@@ -59,9 +58,10 @@ function Inner({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
-    await fetch("/api/auth", { method: "DELETE" });
-    router.push("/login");
-    router.refresh();
+    await fetch("/api/auth", { method: "DELETE", cache: "no-store" });
+    // Rechargement complet : vide le cache du routeur et celui du navigateur,
+    // pour qu'aucune page protégée ne puisse être resservie après coup.
+    window.location.replace("/login");
   };
 
   // La page de connexion n'a ni barre latérale ni navigation.
